@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Marcben James Samuel: vision models that find what is wrong</title>
+    <meta
+      name="description"
+      content="Marcben James Samuel builds vision models that find defects in steel, parasites in blood, rot in onions and hard drives about to fail. Research, projects and resume."
+    />
+    <meta name="theme-color" content="#EDE3EA" />
+    <meta property="og:title" content="Marcben James Samuel" />
+    <meta property="og:description" content="Vision models that find what is wrong with things." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <div id="ground" aria-hidden="true"></div>
+    <div id="flood" aria-hidden="true"></div>
+    <div id="titles" aria-hidden="true"></div>
+    <canvas id="gl" aria-hidden="true"></canvas>
+    <div id="grain" aria-hidden="true"></div>
+
+    <header id="bar">
+      <a class="bar-name" href="#top">Marcben James Samuel</a>
+      <nav class="bar-nav" aria-label="Sections">
+        <a href="#work">Work</a>
+        <a href="#record">Record</a>
+        <a href="#contact">Contact</a>
+        <button id="sound" type="button" aria-pressed="false">Sound off</button>
+      </nav>
+    </header>
+
+    <main id="main"></main>
+
+    <aside id="sheet" aria-hidden="true" aria-label="Project details">
+      <button id="sheet-close" type="button">Close</button>
+      <div id="sheet-body"></div>
+    </aside>
+    <div id="sheet-veil" aria-hidden="true"></div>
+
+    <div id="gate" class="gate-live">
+      <canvas id="gate-canvas" aria-hidden="true"></canvas>
+      <div class="gate-inner">
+        <p class="gate-name">Marcben James Samuel</p>
+        <p class="gate-line">This site has sound: a quiet score and a few small noises from the things on screen.</p>
+        <div class="gate-actions">
+          <button id="enter-sound" type="button">Enter with sound</button>
+          <button id="enter-quiet" type="button">Enter in silence</button>
+        </div>
+        <p class="gate-load" id="gate-load">Preparing specimens</p>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
