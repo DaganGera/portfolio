@@ -46,6 +46,7 @@ body {
 body.locked {
   overflow: hidden;
   height: 100vh;
+  height: 100svh;
 }
 
 a {
@@ -84,6 +85,15 @@ h3 {
   inset: 0;
   width: 100%;
   height: 100%;
+}
+#ground,
+#flood,
+#gl,
+#grain {
+  height: 100lvh;
+}
+#titles {
+  height: 100svh;
 }
 #ground {
   z-index: 0;
@@ -124,12 +134,14 @@ h3 {
   flex-direction: column;
   justify-content: flex-start;
   padding-top: 11vh;
+  padding-top: 11svh;
   visibility: hidden;
   color: var(--accent);
   transition: color 0.7s var(--ease);
 }
 .title.is-hero {
   padding-top: 9.5vh;
+  padding-top: 9.5svh;
   color: var(--ink);
 }
 .title.is-on {
@@ -149,6 +161,28 @@ h3 {
 }
 .t-line + .t-line {
   margin-top: 0.02em;
+}
+
+/* phones: the name is stacked, with a grid of seats for the specimens under it */
+.title.is-seated {
+  bottom: auto;
+}
+.is-seated .t-line {
+  display: flex;
+  width: 100%;
+  will-change: auto;
+}
+.t-word {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.t-ink {
+  display: inline-block;
+  font-variation-settings: 'wdth' var(--wdth);
+  will-change: opacity;
+}
+.t-grid {
+  display: none;
 }
 
 /* ---------- top bar ---------- */
@@ -217,32 +251,41 @@ body.is-plain #bar {
 
 .hero {
   height: 135vh;
+  height: 135svh;
 }
 .hero-pin {
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100svh;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   padding: 0 var(--pad) 2.2rem;
 }
+.hero-foot {
+  display: grid;
+  grid-template-columns: minmax(0, 27rem) 1fr;
+  align-items: end;
+  gap: 2rem;
+}
 .hero-intro {
-  max-width: 27rem;
   font-size: 1.22em;
   line-height: 1.35;
 }
 .hero-meta {
   margin-top: 0.7rem;
   font-style: italic;
-  max-width: 27rem;
+}
+.hero-cue {
+  justify-self: end;
+  text-align: right;
+  font-style: italic;
 }
 
-.hero-cue {
-  position: absolute;
-  right: var(--pad);
-  bottom: 2.2rem;
-  font-style: italic;
+/* phones: each specimen on the first screen is a way into its project */
+.hero-slots {
+  display: none;
 }
 
 .sr {
@@ -258,19 +301,22 @@ body.is-plain #bar {
 
 .chapter {
   height: 290vh;
+  height: 290svh;
   position: relative;
 }
 .chapter-pin {
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100svh;
   display: grid;
   grid-template-columns: minmax(0, 27rem) 1fr minmax(0, 21rem);
-  align-items: end;
-  gap: 2rem;
+  grid-template-rows: 1fr auto auto;
+  column-gap: 2rem;
   padding: 0 var(--pad) 2.2rem;
 }
 .chapter-copy,
+.chapter-actions,
 .chapter-stats {
   opacity: 0;
   transform: translateY(1.2rem);
@@ -279,6 +325,7 @@ body.is-plain #bar {
     transform 0.8s var(--ease);
 }
 .chapter.is-active .chapter-copy,
+.chapter.is-active .chapter-actions,
 .chapter.is-active .chapter-stats {
   opacity: 1;
   transform: none;
@@ -286,9 +333,18 @@ body.is-plain #bar {
 }
 .chapter-copy {
   grid-column: 1;
+  grid-row: 2;
+  align-self: end;
+}
+.chapter-actions {
+  grid-column: 1;
+  grid-row: 3;
 }
 .chapter-stats {
   grid-column: 3;
+  grid-row: 2 / span 2;
+  align-self: end;
+  margin: 0;
 }
 .chapter-what {
   font-style: italic;
@@ -364,7 +420,7 @@ body.is-plain #bar {
 }
 .stat-label {
   display: block;
-  margin-top: 0.4rem;
+  margin: 0.4rem 0 0;
   max-width: 19rem;
   font-size: 0.95em;
   line-height: 1.35;
@@ -495,8 +551,12 @@ a.row:focus-visible .row-name {
   margin-bottom: 1rem;
 }
 
+.contact-stage {
+  display: none;
+}
 .contact {
   min-height: 135vh;
+  min-height: 135svh;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -634,9 +694,10 @@ body.sheet-open #sheet-veil {
   background: #4a1237;
   color: #f5dfec;
   display: grid;
-  place-items: center;
-  padding: var(--pad);
+  grid-template-rows: minmax(0, 1fr) auto;
+  padding: clamp(1.2rem, 3.2vw, 3.2rem) var(--pad) 2.2rem;
   clip-path: circle(150% at 50% 50%);
+  overflow: hidden;
 }
 #gate-canvas {
   position: absolute;
@@ -647,54 +708,54 @@ body.sheet-open #sheet-veil {
 .gate-live #gate-canvas {
   display: block;
 }
-.gate-inner {
+/* the room the name is grown in: everything above the line of text and the buttons */
+.gate-stage {
   position: relative;
-  max-width: 34rem;
-  text-align: center;
-}
-/* when the name is grown on the canvas, the heading only holds its place in the layout */
-.gate-live .gate-inner {
-  max-width: none;
+  min-height: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
+  justify-content: center;
 }
-.gate-live .gate-name {
-  color: transparent;
-  animation: none;
-  font-size: 0;
-  margin-bottom: 2.2rem;
-  user-select: none;
-}
-.gate-live .gate-line {
-  max-width: 34rem;
-}
+/* plain type, shown only when the growth cannot run (no WebGL, or reduced motion) */
 .gate-name {
   font-family: var(--display);
   font-variation-settings: 'wdth' 60;
   font-weight: 900;
-  font-size: clamp(2.4rem, 6vw, 4.6rem);
+  font-size: clamp(2.6rem, 10vw, 9rem);
   line-height: 0.85;
-  margin-bottom: 1.4rem;
-  animation: breathe 5s ease-in-out infinite alternate;
+  text-align: center;
 }
-@keyframes breathe {
-  from {
-    font-variation-settings: 'wdth' 55;
-  }
-  to {
-    font-variation-settings: 'wdth' 100;
-  }
+/* when the name is grown on the canvas, the heading only holds its place in the layout */
+.gate-live .gate-name {
+  color: transparent;
+  font-size: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.gate-foot {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1.5rem 3rem;
+  margin-top: 1.6rem;
 }
 .gate-line {
+  max-width: 28rem;
   font-size: 1.1em;
-  margin-bottom: 2rem;
+}
+.gate-load {
+  margin-top: 0.4rem;
+  font-style: italic;
+  font-size: 0.92em;
+  opacity: 0.8;
+  min-height: 1.5em;
 }
 .gate-actions {
   display: flex;
   gap: 0.8rem;
-  justify-content: center;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .gate-actions button {
   font-family: var(--display);
@@ -703,6 +764,7 @@ body.sheet-open #sheet-veil {
   padding: 0.85rem 1.4rem 0.8rem;
   border-radius: 999px;
   border: 2px solid #f5dfec;
+  white-space: nowrap;
   transition:
     font-variation-settings 0.45s var(--ease),
     background-color 0.3s,
@@ -721,45 +783,189 @@ body.sheet-open #sheet-veil {
   opacity: 0.35;
   cursor: progress;
 }
-.gate-load {
-  margin-top: 1.6rem;
-  font-style: italic;
-  font-size: 0.92em;
-  opacity: 0.8;
-  min-height: 1.5em;
+
+/* ---------- phones and narrow windows ---------- */
+
+.bar-short {
+  display: none;
 }
 
-/* ---------- smaller screens ---------- */
-
 @media (max-width: 900px) {
+  :root {
+    --pad: 1.05rem;
+  }
+  body {
+    font-size: 1rem;
+  }
+
+  /* top bar: initials, so the section links still fit */
+  #bar {
+    padding: 0.55rem var(--pad);
+    align-items: center;
+    font-size: 0.9rem;
+  }
+  .bar-full {
+    display: none;
+  }
+  .bar-short {
+    display: inline;
+  }
+  .bar-nav {
+    gap: 1rem;
+  }
+  #bar a,
+  #bar button {
+    padding: 0.7rem 0;
+  }
+  #sound {
+    min-width: 4.6rem;
+  }
+
+  /* first screen: name on top, the four specimens in a grid, then the opening lines */
+  .title {
+    padding-top: 4.2rem;
+  }
+  .title.is-hero {
+    padding-top: 4rem;
+  }
+  .t-grid {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-auto-rows: 1fr;
+    gap: 0 0.5rem;
+    margin: 0.5rem 0 0.4rem;
+  }
+  .hero-pin {
+    padding-bottom: 1.3rem;
+  }
+  .hero-foot {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .hero-intro {
+    font-size: 1.06em;
+    line-height: 1.32;
+  }
+  .hero-meta {
+    margin-top: 0.4rem;
+    font-size: 0.92em;
+  }
+  .hero-cue {
+    display: none;
+  }
+  .hero-slots {
+    display: block;
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .hero-slot {
+    position: absolute;
+    display: block;
+    pointer-events: auto;
+    text-decoration: none;
+    border-radius: 12px;
+  }
+  .hero-tag {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-family: var(--display);
+    font-variation-settings: 'wdth' 78;
+    font-weight: 700;
+    font-size: 0.82rem;
+  }
+
+  /* chapters: the claim first, then the numbers in the same place, so the specimen keeps its room */
+  .chapter {
+    height: 250vh;
+    height: 250svh;
+  }
   .chapter-pin {
     grid-template-columns: 1fr;
-    align-content: end;
-    gap: 1.2rem;
+    padding-bottom: 1.3rem;
   }
   .chapter-copy,
   .chapter-stats {
     grid-column: 1;
+    grid-row: 2;
+    align-self: end;
   }
-  .chapter-stats {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.8rem;
+  .chapter-actions {
+    grid-column: 1;
+    margin-top: 1rem;
   }
-  .stat + .stat {
-    margin-top: 0;
-    padding-top: 0;
-    border-top: 0;
+  .chapter.is-active .chapter-stats {
+    opacity: 0;
+    transform: translateY(1.2rem);
+    pointer-events: none;
+    transition-delay: 0s;
   }
-  .stat-label {
-    font-size: 0.78em;
+  .chapter.is-active.is-late .chapter-stats {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    transition-delay: 0.15s;
+  }
+  .chapter.is-active.is-late .chapter-copy {
+    opacity: 0;
+    transform: translateY(-1.2rem);
+    transition-delay: 0s;
+  }
+  .chapter-what {
+    font-size: 1em;
+    margin-bottom: 0.45rem;
   }
   .chapter-claim {
-    font-size: 1.02em;
+    font-size: 1.04em;
+    line-height: 1.36;
+  }
+  .chapter-status {
+    margin-top: 0.5rem;
+  }
+  .stat {
+    display: grid;
+    grid-template-columns: 6.6rem 1fr;
+    gap: 0.9rem;
+    align-items: center;
+  }
+  .stat + .stat {
+    margin-top: 0.7rem;
+    padding-top: 0.7rem;
+  }
+  .stat-value {
+    font-size: 2.25rem;
+  }
+  .stat-label {
+    margin: 0;
+    max-width: none;
+    font-size: 0.92em;
+    line-height: 1.3;
+  }
+
+  .btn,
+  .link {
+    font-size: 0.95rem;
+  }
+  .link {
+    padding: 0.55rem 0;
+  }
+
+  /* lists */
+  .plain {
+    padding: 16vh var(--pad) 8vh;
+  }
+  .plain-head {
+    margin-bottom: 2.2rem;
   }
   .row {
     grid-template-columns: 1fr;
-    gap: 0.4rem;
+    gap: 0.35rem;
+    padding: 1.15rem 0 1.05rem;
   }
   .row-stack {
     text-align: left;
@@ -769,22 +975,93 @@ body.sheet-open #sheet-veil {
   .contact-grid {
     grid-template-columns: 1fr;
   }
+  .record-grid {
+    gap: 2.8rem;
+  }
+  .record-block + .record-block {
+    margin-top: 2.6rem;
+  }
+  .job-top {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /* last screen: the specimens get a row of their own above the words */
+  .contact {
+    min-height: 118vh;
+    min-height: 118svh;
+    padding-bottom: 1.3rem;
+  }
+  .contact-stage {
+    display: block;
+    height: 17vh;
+    height: 17svh;
+    margin-bottom: 0.7rem;
+  }
+  .contact-grid {
+    gap: 1.4rem;
+  }
+  .contact-grid > span {
+    display: none;
+  }
+  .contact-lead {
+    font-size: 1.06em;
+    margin-bottom: 0.9rem;
+  }
+  /* the button on a line of its own, the three links side by side under it */
   .contact-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.2rem 1.3rem;
     text-align: left;
-    justify-items: start;
   }
-  #bar .bar-nav a {
-    display: none;
+  .contact-list .btn {
+    margin: 0 100% 0.3rem 0;
+    white-space: nowrap;
   }
-  .hero-cue {
-    display: none;
+  .contact-foot {
+    margin-top: 1rem;
+    font-size: 0.85em;
+  }
+
+  #sheet {
+    padding-top: 4rem;
+  }
+  #sheet-close {
+    padding: 0.6rem 0;
+    top: 0.6rem;
+  }
+
+  #gate {
+    padding: 1.4rem var(--pad) 1.3rem;
+  }
+  .gate-foot {
+    flex-direction: column;
+    align-items: stretch;
+    margin-top: 1.2rem;
+  }
+  .gate-line {
+    font-size: 1em;
+  }
+  .gate-actions {
+    justify-content: flex-start;
+  }
+  .gate-actions button {
+    flex: 1 1 auto;
+  }
+}
+
+/* short, wide windows (a phone on its side): nothing is pinned, the page just scrolls */
+@media (max-height: 480px) {
+  .hero,
+  .chapter {
+    height: auto;
+    min-height: 100vh;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .gate-name {
-    animation: none;
-  }
   * {
     transition-duration: 0.01s !important;
   }

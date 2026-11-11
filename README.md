@@ -23,12 +23,26 @@ Everything the site says is in `src/content.ts`.
 - **Resume:** replace `public/files/Marcben-James-Samuel-Resume.pdf`.
 - **Figures** in the "Read how it works" panel live in `public/img/`.
 
+## How the layout holds together
+
+- **Entry screen:** the name is grown by a cellular automaton
+  (`src/gl/gate.ts`), sized to span the screen. The cursor tears wounds that
+  heal, small wounds open by themselves, and a tide of colour keeps moving
+  through the cells.
+- **Phones (under 900px wide):** the page reserves room for each 3D object and
+  tells the stage where it is (`seatHero`, `seatChapters`, `seatOutro` in
+  `src/main.ts`, `Stage.place` in `src/gl/stage.ts`). The name is stacked with
+  the specimens in a grid under it. In a chapter the object gets the band
+  between the title and the text, the claim shows first and the numbers
+  replace it halfway through. Heights use `svh`, so the address bar sliding
+  away does not re-lay the page.
+
 ## Where things are
 
 | File | What |
 |---|---|
 | `src/content.ts` | All copy, links, numbers, colour sets |
-| `src/main.ts` | Page build, scroll choreography, colour floods, fitted titles |
+| `src/main.ts` | Page build, scroll choreography, colour floods, fitted titles, seating |
 | `src/gl/stage.ts` | Renderer, lights, where each specimen sits in each scene |
 | `src/gl/specimens.ts` | The four objects: steel plate, culture dish, onion, hard drive |
 | `src/gl/gate.ts` | Entry screen: the name grown by a cellular automaton |

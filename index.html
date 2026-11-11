@@ -24,7 +24,7 @@
     <div id="grain" aria-hidden="true"></div>
 
     <header id="bar">
-      <a class="bar-name" href="#top">Marcben James Samuel</a>
+      <a class="bar-name" href="#top" aria-label="Marcben James Samuel, back to top"><span class="bar-full">Marcben James Samuel</span><span class="bar-short">MJS</span></a>
       <nav class="bar-nav" aria-label="Sections">
         <a href="#work">Work</a>
         <a href="#record">Record</a>
@@ -43,14 +43,18 @@
 
     <div id="gate" class="gate-live">
       <canvas id="gate-canvas" aria-hidden="true"></canvas>
-      <div class="gate-inner">
+      <div class="gate-stage">
         <p class="gate-name">Marcben James Samuel</p>
-        <p class="gate-line">This site has sound: a quiet score and a few small noises from the things on screen.</p>
+      </div>
+      <div class="gate-foot">
+        <div class="gate-say">
+          <p class="gate-line">This site has sound: a quiet score and a few small noises from the things on screen.</p>
+          <p class="gate-load" id="gate-load">Preparing specimens</p>
+        </div>
         <div class="gate-actions">
           <button id="enter-sound" type="button">Enter with sound</button>
           <button id="enter-quiet" type="button">Enter in silence</button>
         </div>
-        <p class="gate-load" id="gate-load">Preparing specimens</p>
       </div>
     </div>
 

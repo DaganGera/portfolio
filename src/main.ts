@@ -8,7 +8,7 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
 
-import { flagships, more, offHours, person, record, worlds, type Flagship, type WorldKey } from './content';
+import { flagships, more, offHours, person, record, worlds, type Flagship, type SpecimenKey, type WorldKey } from './content';
 import { Sound } from './audio';
 import { Stage, type StageMode } from './gl/stage';
 import { GateGrowth } from './gl/gate';
@@ -17,6 +17,9 @@ gsap.registerPlugin(ScrollTrigger);
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string, root: ParentNode = document) => root.querySelector<T>(s)!;
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const narrowQuery = window.matchMedia('(max-width: 900px)');
+const coarse = window.matchMedia('(pointer: coarse)');
+const isNarrow = () => narrowQuery.matches;
 
 /* ------------------------------------------------------------
    Page content, built from content.ts
@@ -31,14 +34,36 @@ function titleBlock(id: string, lines: string[], hero = false) {
     .join('')}</div>`;
 }
 
-titles.innerHTML =
-  titleBlock('hero', person.name, true) +
-  flagships.map((f) => titleBlock(f.id, f.title)).join('') +
-  titleBlock('contact', ['Say hello']);
+/*
+  Phones only: the name is stacked and each specimen gets a seat in a grid
+  under it. Wide screens keep the name edge to edge with the specimens loose
+  in front of it.
+*/
+type Seat = Exclude<SpecimenKey, 'none'>;
+const seated = (k: Seat) => flagships.find((f) => f.specimen === k);
+const seats = (['plate', 'dish', 'onion', 'drive'] as Seat[]).filter(seated);
+
+function heroSeated() {
+  return `<div class="title is-hero is-seated" data-title="hero">
+    ${person.name.map((w) => `<span class="t-line"><span class="t-word"><span class="t-ink">${w}</span></span></span>`).join('')}
+    <span class="t-grid">${seats.map((k) => `<span class="t-cell" data-slot="${k}"></span>`).join('')}</span>
+  </div>`;
+}
+
+let titlesNarrow: boolean | undefined;
+function buildTitles() {
+  const narrow = isNarrow();
+  if (narrow === titlesNarrow) return;
+  titlesNarrow = narrow;
+  // on a phone a two-word title is two lines, so each word can still run the width of the screen
+  const lines = (f: Flagship) => (narrow ? f.title.flatMap((l) => l.split(' ')) : f.title);
+  titles.innerHTML = (narrow ? heroSeated() : titleBlock('hero', person.name, true)) + flagships.map((f) => titleBlock(f.id, lines(f))).join('') + titleBlock('contact', ['Say hello']);
+}
+buildTitles();
 
 function chapter(f: Flagship, first: boolean) {
   return `
-  <section class="chapter" id="${f.id}" data-world="${f.world}" data-mode="${f.specimen === 'none' ? 'away' : f.specimen}" data-title="${f.id}" data-progress="${f.specimen}">
+  <section class="chapter" id="${f.id}" data-world="${f.world}" data-mode="${f.specimen === 'none' ? 'away' : f.specimen}" data-title="${f.id}" data-specimen="${f.specimen}">
     ${first ? '<span id="work"></span>' : ''}
     <div class="chapter-pin">
       <div class="chapter-copy">
@@ -46,14 +71,14 @@ function chapter(f: Flagship, first: boolean) {
         <p class="chapter-what">${f.what}</p>
         <p class="chapter-claim">${f.claim}</p>
         ${f.status ? `<p class="chapter-status">${f.status}</p>` : ''}
-        <div class="chapter-actions">
-          <button class="btn" type="button" data-sheet="${f.id}">Read how it works</button>
-          ${f.links.map((l) => `<a class="link" href="${l.href}" target="_blank" rel="noopener">${l.label}</a>`).join('')}
-        </div>
+      </div>
+      <div class="chapter-actions">
+        <button class="btn" type="button" data-sheet="${f.id}">Read how it works</button>
+        ${f.links.map((l) => `<a class="link" href="${l.href}" target="_blank" rel="noopener">${l.label}</a>`).join('')}
       </div>
       <dl class="chapter-stats">
         ${f.stats
-          .map((s) => `<div class="stat"><dt class="stat-value">${s.value}</dt><dd class="stat-label" style="margin-left:0">${s.label}</dd></div>`)
+          .map((s) => `<div class="stat"><dt class="stat-value">${s.value}</dt><dd class="stat-label">${s.label}</dd></div>`)
           .join('')}
       </dl>
     </div>
@@ -64,9 +89,21 @@ main.innerHTML = `
   <section class="hero" id="top" data-world="scale" data-mode="cluster" data-title="hero">
     <div class="hero-pin">
       <h1 class="sr">${person.name.join(' ')}</h1>
-      <p class="hero-intro">${person.intro}</p>
-      <p class="hero-meta">${person.study}. ${person.where}.</p>
-      <p class="hero-cue">Scroll. ${flagships.length} specimens follow.</p>
+      <nav class="hero-slots" aria-label="Flagship projects">
+        ${seats
+          .map((k) => {
+            const f = seated(k)!;
+            return `<a class="hero-slot" href="#${f.id}" data-slot="${k}" aria-label="${f.title.join(' ')}: ${f.what}"><span class="hero-tag">${f.title.join(' ')}</span></a>`;
+          })
+          .join('')}
+      </nav>
+      <div class="hero-foot">
+        <div>
+          <p class="hero-intro">${person.intro}</p>
+          <p class="hero-meta">${person.study}. ${person.where}.</p>
+        </div>
+        <p class="hero-cue">Scroll. ${flagships.length} specimens follow.</p>
+      </div>
     </div>
   </section>
 
@@ -148,6 +185,7 @@ main.innerHTML = `
   </section>
 
   <section class="contact" id="contact" data-world="sprout" data-mode="outro" data-title="contact">
+    <div class="contact-stage" aria-hidden="true"></div>
     <div class="contact-grid">
       <div>
         <h2 class="sr">Contact</h2>
@@ -198,42 +236,148 @@ function fitLine(el: HTMLElement, W: number, fs: number): { wdth: number; fs: nu
   return { wdth: (lo + hi) / 2, fs };
 }
 
+/* where each chapter's title ends, so a phone can seat the specimen under it */
+const titleEnd = new Map<string, number>();
+
+function fitHero(block: HTMLElement) {
+  const pin = $('.hero-pin');
+  const foot = $('.hero-foot');
+  const gap = 12;
+  // the name and the specimens share the screen down to the opening lines
+  block.style.height = `${foot.offsetTop - gap}px`;
+  const padTop = parseFloat(getComputedStyle(block).paddingTop);
+  const avail = foot.offsetTop - gap - padTop;
+  const lines = [...block.querySelectorAll<HTMLElement>('.t-line')];
+  // the name takes the upper half of that space and the specimens the rest
+  const nameH = avail * 0.5;
+  const fs0 = nameH / (lines.length * 0.82);
+  const live = block.dataset.live === '1';
+  const out: Fitted[] = [];
+  for (const line of lines) {
+    line.style.fontSize = `${fs0}px`;
+    const ink = line.querySelector<HTMLElement>('.t-ink')!;
+    const W = line.querySelector<HTMLElement>('.t-word')!.clientWidth;
+    let fit = fitLine(ink, W, fs0);
+    if (fit.fs > fs0) fit = { wdth: 150, fs: fs0 };
+    ink.style.fontSize = '';
+    line.style.fontSize = `${fit.fs}px`;
+    ink.style.setProperty('--wdth', String(live ? fit.wdth : 50));
+    out.push({ el: ink, wdth: fit.wdth });
+  }
+  fitted.set('hero', out);
+}
+
 function fitTitles() {
-  const vh = window.innerHeight;
+  buildTitles();
+  const narrow = isNarrow();
+  const vh = $('.hero-pin').offsetHeight || window.innerHeight;
   titles.querySelectorAll<HTMLElement>('.title').forEach((block) => {
     const id = block.dataset.title!;
-    const lines = [...block.querySelectorAll<HTMLElement>('.t-line')];
-    const hero = block.classList.contains('is-hero');
-    const cap = vh * (hero ? 0.7 : 0.36);
-    const fs0 = hero ? cap / (lines.length * 0.82) : vh * (lines.length > 1 ? 0.23 : 0.31);
-    let W = block.clientWidth;
     const prevVis = block.style.visibility;
     block.style.visibility = 'hidden';
     block.classList.add('is-on');
-    let out: { wdth: number; fs: number }[] = [];
-    for (let pass = 0; pass < 2; pass++) {
-      out = lines.map((l) => fitLine(l, W, fs0));
-      const total = out.reduce((s, o) => s + o.fs * 0.82, 0);
-      if (total <= cap) break;
-      W *= cap / total;
-    }
     const live = block.dataset.live === '1';
-    lines.forEach((l, i) => {
-      l.style.fontSize = `${out[i].fs}px`;
-      l.style.setProperty('--wdth', String(live ? out[i].wdth : 50));
-    });
+    if (block.classList.contains('is-seated')) {
+      fitHero(block);
+    } else {
+      const lines = [...block.querySelectorAll<HTMLElement>('.t-line')];
+      const hero = block.classList.contains('is-hero');
+      const cap = vh * (hero ? 0.7 : narrow ? 0.25 : 0.36);
+      const fs0 = hero || narrow ? cap / (lines.length * 0.82) : vh * (lines.length > 1 ? 0.23 : 0.31);
+      let W = block.clientWidth;
+      let out: { wdth: number; fs: number }[] = [];
+      let total = 0;
+      for (let pass = 0; pass < 2; pass++) {
+        out = lines.map((l) => fitLine(l, W, fs0));
+        total = out.reduce((s, o) => s + o.fs * 0.82, 0);
+        if (total <= cap) break;
+        W *= cap / total;
+        total = cap;
+      }
+      lines.forEach((l, i) => {
+        l.style.fontSize = `${out[i].fs}px`;
+        l.style.setProperty('--wdth', String(live ? out[i].wdth : 50));
+      });
+      fitted.set(
+        id,
+        lines.map((el, i) => ({ el, wdth: out[i].wdth })),
+      );
+      titleEnd.set(id, parseFloat(getComputedStyle(block).paddingTop) + total);
+    }
     if (!live) block.classList.remove('is-on');
     block.style.visibility = prevVis;
-    fitted.set(
-      id,
-      lines.map((el, i) => ({ el, wdth: out[i].wdth })),
-    );
   });
 }
 
+/* ------------------------------------------------------------
+   Seating: the page reserves room for each specimen and tells the stage
+   where it is.
+   ------------------------------------------------------------ */
+
+function seatHero() {
+  const block = titles.querySelector<HTMLElement>('.title.is-seated');
+  document.querySelectorAll<HTMLElement>('.hero-slot').forEach((link) => {
+    const key = link.dataset.slot!;
+    const el = block?.querySelector<HTMLElement>(`.t-cell[data-slot="${key}"]`);
+    if (!el) {
+      stage?.place('cluster', key, null);
+      return;
+    }
+    // the block is laid out even while hidden, so its boxes can be read at any time
+    const r = el.getBoundingClientRect();
+    link.style.left = `${r.left}px`;
+    link.style.top = `${r.top}px`;
+    link.style.width = `${r.width}px`;
+    link.style.height = `${r.height}px`;
+    const tag = 26; // the project name under each one
+    stage?.place('cluster', key, { cx: r.left + r.width / 2, cy: r.top + (r.height - tag) / 2, w: r.width, h: r.height - tag }, 0.86);
+  });
+}
+
+function seatChapters() {
+  const narrow = isNarrow();
+  document.querySelectorAll<HTMLElement>('.chapter').forEach((sec) => {
+    const key = sec.dataset.specimen!;
+    if (key === 'none') return;
+    const pin = $('.chapter-pin', sec);
+    if (!narrow) {
+      stage?.place('solo', key, null);
+      const copy = $('.chapter-copy', sec);
+      const left = copy.offsetLeft + copy.offsetWidth;
+      const right = $('.chapter-stats', sec).offsetLeft;
+      stage?.fitSolo(key, (left + right) / 2, (right - left) * 1.06);
+      return;
+    }
+    const top = (titleEnd.get(sec.dataset.title!) ?? pin.offsetHeight * 0.3) + 4;
+    const bottom = Math.min($('.chapter-copy', sec).offsetTop, $('.chapter-stats', sec).offsetTop) - 12;
+    const h = Math.max(48, bottom - top);
+    stage?.place('solo', key, { cx: pin.offsetWidth / 2, cy: top + h / 2, w: pin.offsetWidth * 0.86, h });
+  });
+}
+
+/* on a phone the last screen scrolls, so its specimens ride along with the room kept for them */
+const contactStage = $('.contact-stage');
+function seatOutro() {
+  if (!stage) return;
+  if (!isNarrow()) {
+    seats.forEach((k) => stage!.place('outro', k, null));
+    return;
+  }
+  const r = contactStage.getBoundingClientRect();
+  const w = r.width / seats.length;
+  seats.forEach((k, i) => stage!.place('outro', k, { cx: r.left + w * (i + 0.5), cy: r.top + r.height / 2, w: w * 1.12, h: r.height }));
+}
+
+function layout() {
+  fitTitles();
+  seatHero();
+  seatChapters();
+  seatOutro();
+}
+
 let liveTitle = '';
-function showTitle(id: string) {
-  if (id === liveTitle) return;
+function showTitle(id: string, again = false) {
+  if (id === liveTitle && !again) return;
   liveTitle = id;
   titles.querySelectorAll<HTMLElement>('.title').forEach((block) => {
     const lines = fitted.get(block.dataset.title!) ?? [];
@@ -366,14 +510,16 @@ function wireScroll() {
         scrollTrigger: { trigger: section, start: 'bottom bottom', end: 'bottom 62%', scrub: true },
       });
     }
-    const key = section.dataset.progress;
-    if (key && key !== 'none') {
+    if (section.classList.contains('chapter')) {
+      const key = section.dataset.specimen!;
       ScrollTrigger.create({
         trigger: section,
         start: 'top top',
         end: 'bottom bottom',
         onUpdate: (self) => {
-          if (stage) stage.progress[key] = self.progress;
+          if (stage && key !== 'none') stage.progress[key] = self.progress;
+          // phones show the claim first and the numbers second, in the same place
+          section.classList.toggle('is-late', self.progress > 0.5);
         },
       });
     }
@@ -477,8 +623,6 @@ async function boot() {
     document.fonts.load("italic 500 40px 'Brygada 1918 Variable'"),
     document.fonts.load("400 20px 'Brygada 1918 Variable'"),
   ]);
-  fitTitles();
-
   // the entry screen grows the name from one cell; without WebGL or with reduced motion it stays as plain type
   if (reduced) gate.classList.remove('gate-live');
   else {
@@ -523,22 +667,33 @@ async function boot() {
     };
   }
 
+  layout();
+
   gsap.ticker.lagSmoothing(0);
   gsap.ticker.add((time, deltaMs) => {
     lenis?.raf(time * 1000);
     growth?.tick(time, deltaMs / 1000);
     if (stage) {
+      if (stage.mode === 'outro' && isNarrow()) seatOutro();
       stage.scrollSpeed = (lenis?.velocity ?? 0) * 60;
       stage.tick(time, deltaMs / 1000);
     }
   });
 
   wireScroll();
+  // a phone's address bar sliding away changes the height many times a scroll; that is not a new layout
+  ScrollTrigger.config({ ignoreMobileResize: true });
   let rt = 0;
+  let lastW = window.innerWidth;
   window.addEventListener('resize', () => {
+    if (coarse.matches && window.innerWidth === lastW) return;
+    lastW = window.innerWidth;
     window.clearTimeout(rt);
     rt = window.setTimeout(() => {
-      fitTitles();
+      const wasNarrow = titlesNarrow;
+      stage?.resize();
+      layout();
+      if (wasNarrow !== titlesNarrow && liveTitle) showTitle(liveTitle, true);
       ScrollTrigger.refresh();
     }, 150);
   });

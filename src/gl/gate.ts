@@ -7,7 +7,9 @@ import * as THREE from 'three';
   comes alive when a neighbour is alive; one seed is planted first and a few more
   nucleate as it goes. Cells age from green to pink to pale, a few die at random
   and are replaced, and the cursor tears a wound that the neighbours grow back
-  over. Nothing is drawn as text: the letters only say where growth may hold.
+  over. Left alone, small wounds open by themselves and heal, and a slow tide of
+  renewal keeps moving through the tissue, so the name never sets into one flat
+  colour. Nothing is drawn as text: the letters only say where growth may hold.
 */
 
 interface Line {
@@ -15,9 +17,16 @@ interface Line {
   stretch: CanvasFontStretch;
 }
 
+/* wide screens: two lines, each fitted to the width of the screen */
 const LINES: Line[] = [
-  { text: 'Marcben James', stretch: 'condensed' },
-  { text: 'Samuel', stretch: 'extra-expanded' },
+  { text: 'Marcben James', stretch: 'extra-condensed' },
+  { text: 'Samuel', stretch: 'expanded' },
+];
+/* tall screens: a word a line */
+const LINES_TALL: Line[] = [
+  { text: 'Marcben', stretch: 'extra-condensed' },
+  { text: 'James', stretch: 'normal' },
+  { text: 'Samuel', stretch: 'condensed' },
 ];
 const FAMILY = "'Anybody Variable', sans-serif";
 const GAP = 0.1; // space between the lines, as a share of the first line's height
@@ -37,6 +46,7 @@ const SIM = /* glsl */ `
   uniform float uNucleate;
   uniform vec2 uSeed;
   uniform vec3 uMouse; // cell x, cell y, wound radius in cells
+  uniform vec3 uCut; // a wound that opens by itself: cell x, cell y, radius
 
   float hash(vec2 p) {
     p = fract(p * vec2(123.34, 456.21));
@@ -71,6 +81,7 @@ const SIM = /* glsl */ `
     }
     if (distance(cell, uSeed) < 0.9) alive = max(alive, 0.08);
     if (distance(cell, uMouse.xy) < uMouse.z) { alive = 0.0; age = 0.0; }
+    if (distance(cell, uCut.xy) < uCut.z) { alive = 0.0; age = 0.0; }
     age = alive > 0.0 ? min(1.0, age + 0.0022) : 0.0;
     gl_FragColor = vec4(alive, age, 0.0, 1.0);
   }
@@ -84,7 +95,9 @@ const SHOW = /* glsl */ `
   uniform float uPx; // one screen pixel, in cells
   uniform float uTime;
   uniform vec2 uMouse;
+  uniform float uTide; // how tightly the bands of the tide are packed, per cell
   uniform vec3 uGround;
+  uniform vec3 uGlow;
   uniform vec3 uDot;
   uniform vec3 uYoung;
   uniform vec3 uMid;
@@ -98,25 +111,33 @@ const SHOW = /* glsl */ `
     float alive = s.r;
     float age = s.g;
 
-    // the empty medium: a field of faint dots that swell near the cursor
-    float near = smoothstep(16.0, 0.0, distance(cell, uMouse));
+    // the empty medium: a field of faint dots that swell near the cursor, lit by a pool of lighter colour
+    float md = distance(cell, uMouse);
+    float near = smoothstep(18.0, 0.0, md);
     float ripple = sin(cell.x * 0.19 + cell.y * 0.23 - uTime * 1.1) * 0.5 + 0.5;
-    float dr = 0.055 + 0.02 * ripple + 0.09 * near;
+    float dr = 0.05 + 0.02 * ripple + 0.1 * near;
     float dotMask = smoothstep(dr + uPx, dr - uPx, length(f));
-    vec3 col = mix(uGround, uDot, dotMask * (0.55 + 0.45 * near));
+    float pool = exp(-md * md * uTide * uTide * 0.9);
+    vec3 col = mix(mix(uGround, uGlow, pool), uDot, dotMask * (0.5 + 0.5 * near));
+
+    // a slow tide of renewal moves through the tissue: on its front the cells look young again
+    float bend = sin(cell.y * uTide * 0.7 + uTime * 0.23) * 2.0 + sin(cell.x * uTide * 0.33 - uTime * 0.17) * 1.5;
+    float tide = sin((cell.x * 0.82 + cell.y * 0.57) * uTide - uTime * 0.7 + bend);
+    float front = smoothstep(0.6, 1.0, tide);
+    float seen = age * (1.0 - 0.92 * front);
 
     // a living cell: a rounded square that swells as it grows in
     float breathe = sin(cell.x * 0.31 - cell.y * 0.27 + uTime * 1.7) * 0.5 + 0.5;
-    float half_ = alive * (0.405 + 0.03 * breathe);
-    float rad = min(0.13, half_);
+    float half_ = alive * (0.4 + 0.03 * breathe + 0.045 * front);
+    float rad = min(0.14, half_);
     vec2 q = abs(f) - (half_ - rad);
     float sd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rad;
     float cm = step(0.01, alive) * smoothstep(uPx, -uPx, sd);
     // each cell settles to its own shade, so the grown name is never one flat colour
     float own = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
-    vec3 settled = mix(uOld, uMid, own * own * 0.55);
-    vec3 cc = mix(uYoung, uMid, smoothstep(0.0, 0.35, age));
-    cc = mix(cc, settled, smoothstep(0.35, 0.95, age));
+    vec3 settled = mix(uOld, uMid, own * own * 0.42);
+    vec3 cc = mix(uYoung, uMid, smoothstep(0.0, 0.35, seen));
+    cc = mix(cc, settled, smoothstep(0.35, 0.95, seen));
     col = mix(col, cc, cm);
 
     gl_FragColor = vec4(col, 1.0);
@@ -139,6 +160,11 @@ export class GateGrowth {
   private tickN = 0;
   private mouse = new THREE.Vector2(-999, -999);
   private wound = 0;
+  private inside: number[] = []; // a sample of cells inside the letters, for the wounds that open by themselves
+  private cutAt = 0;
+  private cutLeft = 0;
+  private watch: ResizeObserver;
+  private at = { x: 0, y: 0, w: 0, h: 0 };
   private onMove: (e: PointerEvent) => void;
   private onResize: () => void;
   private resizeTimer = 0;
@@ -158,6 +184,7 @@ export class GateGrowth {
         uNucleate: { value: 0 },
         uSeed: { value: new THREE.Vector2(-9, -9) },
         uMouse: { value: new THREE.Vector3(-999, -999, 0) },
+        uCut: { value: new THREE.Vector3(-999, -999, 0) },
       },
       vertexShader: VERT,
       fragmentShader: SIM,
@@ -171,7 +198,9 @@ export class GateGrowth {
         uPx: { value: 0.1 },
         uTime: { value: 0 },
         uMouse: { value: this.mouse },
+        uTide: { value: 0.06 },
         uGround: { value: new THREE.Color('#4A1237') },
+        uGlow: { value: new THREE.Color('#6A1E50') },
         uDot: { value: new THREE.Color('#7C3562') },
         uYoung: { value: new THREE.Color('#C6D63A') },
         uMid: { value: new THREE.Color('#EE7FB6') },
@@ -201,29 +230,49 @@ export class GateGrowth {
     gate.addEventListener('pointermove', this.onMove);
     window.addEventListener('resize', this.onResize);
     this.layout();
+    // if the room for the name moves or changes size after the first measure, grow it again where it belongs
+    this.watch = new ResizeObserver(() => {
+      const st = this.spacer.parentElement!.getBoundingClientRect();
+      const d = this.at;
+      if (Math.abs(st.left - d.x) > 1 || Math.abs(st.top - d.y) > 1 || Math.abs(st.width - d.w) > 1 || Math.abs(st.height - d.h) > 1) this.onResize();
+    });
+    this.watch.observe(this.spacer.parentElement!);
   }
 
   /* measure the name, size the grid, and start growth again from one seed */
   layout() {
     const vw = this.gate.clientWidth;
     const vh = this.gate.clientHeight;
-    this.cell = Math.max(5, Math.min(10, Math.round(vw / 235)));
+    const tall = vw / vh < 0.8;
+    this.cell = Math.max(4, Math.min(7, Math.round(vw / 330)));
     const cols = Math.ceil(vw / this.cell);
     const rows = Math.ceil(vh / this.cell);
 
-    // fit both lines to one width; the short word runs wide and the long one narrow
+    // the name takes all the room it is given: every line is set to the same width, so the short
+    // word runs wide and the long one narrow, and the whole block shrinks only if it would be too tall
+    const stage = this.spacer.parentElement!;
+    const room = stage.getBoundingClientRect();
+    this.at = { x: room.left, y: room.top, w: room.width, h: room.height };
     const probe = document.createElement('canvas').getContext('2d')!;
-    const W = Math.min(vw * 0.8, vh * 1.45, 1560);
-    const fonts = LINES.map((l) => {
-      probe.font = `900 100px ${FAMILY}`;
-      probe.fontStretch = l.stretch;
-      const m = probe.measureText(l.text);
-      const fs = (100 * W) / m.width;
-      const k = fs / 100;
-      return { ...l, fs, up: m.actualBoundingBoxAscent * k, down: m.actualBoundingBoxDescent * k, left: m.actualBoundingBoxLeft * k };
-    });
+    const measure = (W: number) =>
+      (tall ? LINES_TALL : LINES).map((l) => {
+        probe.font = `900 100px ${FAMILY}`;
+        probe.fontStretch = l.stretch;
+        const m = probe.measureText(l.text);
+        const fs = (100 * W) / m.width;
+        const k = fs / 100;
+        return { ...l, fs, up: m.actualBoundingBoxAscent * k, down: m.actualBoundingBoxDescent * k, left: m.actualBoundingBoxLeft * k };
+      });
+    const height = (f: ReturnType<typeof measure>) => f.reduce((s, x) => s + x.up + x.down, 0) + f[0].up * GAP * (f.length - 1);
+    let W = Math.min(stage.clientWidth, 1900);
+    let fonts = measure(W);
+    const over = height(fonts) / Math.max(1, stage.clientHeight);
+    if (over > 1) {
+      W /= over;
+      fonts = measure(W);
+    }
     const gap = fonts[0].up * GAP;
-    const H = fonts.reduce((s, f) => s + f.up + f.down, 0) + gap * (fonts.length - 1);
+    const H = height(fonts);
     this.spacer.style.width = `${W}px`;
     this.spacer.style.height = `${H}px`;
     const box = this.spacer.getBoundingClientRect();
@@ -266,6 +315,14 @@ export class GateGrowth {
         }
       }
     }
+
+    this.inside = [];
+    for (let j = 0; j < rows; j += 2) {
+      for (let i = 0; i < cols; i += 2) {
+        if (data[(j * cols + i) * 4] > 200) this.inside.push(i, rows - 1 - j);
+      }
+    }
+    this.show.uniforms.uTide.value = (Math.PI * 2) / (cols * 0.3);
 
     this.mask?.dispose();
     this.mask = new THREE.CanvasTexture(mc);
@@ -330,7 +387,17 @@ export class GateGrowth {
 
   tick(t: number, dt: number) {
     this.wound *= Math.exp(-7 * Math.min(dt, 0.05));
-    this.step(2);
+    // once the name has grown, a small wound opens somewhere in it every few seconds and heals over
+    const cut = this.sim.uniforms.uCut.value as THREE.Vector3;
+    if (this.cutLeft > 0) {
+      if (--this.cutLeft === 0) cut.set(-999, -999, 0);
+    } else if (this.tickN > 520 && t > this.cutAt && this.inside.length) {
+      const n = Math.floor(Math.random() * (this.inside.length / 2)) * 2;
+      cut.set(this.inside[n], this.inside[n + 1], 3.5 + Math.random() * 6.5);
+      this.cutLeft = 3;
+      this.cutAt = t + 2.4 + Math.random() * 3.2;
+    }
+    this.step(this.tickN < 700 ? 3 : 2);
     this.show.uniforms.uState.value = this.a!.texture;
     this.show.uniforms.uTime.value = t;
     this.renderer.render(this.scene, this.cam);
@@ -339,6 +406,7 @@ export class GateGrowth {
   dispose() {
     this.gate.removeEventListener('pointermove', this.onMove);
     window.removeEventListener('resize', this.onResize);
+    this.watch.disconnect();
     window.clearTimeout(this.resizeTimer);
     this.a?.dispose();
     this.b?.dispose();

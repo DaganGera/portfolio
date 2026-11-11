@@ -20,9 +20,23 @@ interface Actor {
   solo: Pose; // alone on stage in its own chapter
   outro: Pose; // lined up across the last screen
   w: number; // 0 away, 1 on stage
+  ext: { cluster: [number, number]; solo: [number, number] }; // footprint at scale 1, in world units
   phase: number;
   shadow: THREE.Mesh;
   shadowSize: [number, number];
+}
+
+/* a place on the page (in pixels) that a specimen should sit in */
+export interface PageRect {
+  cx: number;
+  cy: number;
+  w: number;
+  h: number;
+}
+type SlotKind = 'cluster' | 'solo' | 'outro';
+interface Slot {
+  p: THREE.Vector3;
+  s: number;
 }
 
 /* 'cluster' shows all four together, 'away' clears the stage, anything else is one specimen alone */
@@ -38,6 +52,12 @@ export class Stage {
   progress: Record<string, number> = {};
   scrollSpeed = 0;
   onEvent: (name: string, data?: number) => void = () => {};
+
+  private slots: Record<SlotKind, Record<string, Slot>> = { cluster: {}, solo: {}, outro: {} };
+  private soloFit: Record<string, { dx: number; cap: number }> = {};
+  private cw = 0;
+  private ch = 0;
+  private blank = false;
 
   private mouse = new THREE.Vector2();
   private mouseT = new THREE.Vector2();
@@ -95,22 +115,25 @@ export class Stage {
       pose(0, 0.0, 0, -0.32, 0.3, 0.04, 1.15),
       pose(-3.7, 0.25, -0.2, -0.25, 0.45, -0.1, 0.6),
       [3.9, 2.7],
+      { cluster: [3.5, 2.7], solo: [3.5, 2.4] },
     );
     this.add(
       'dish',
       buildDish(ctx),
       pose(-0.2, -1.9, 1.2, 0.95, 0, 0.1, 0.72),
       pose(0, -0.15, 0, 0.98, 0, 0, 1.22),
-      pose(-1.2, -0.15, 0.6, 0.95, 0, 0.08, 0.6),
+      pose(-0.7, 0.05, 0.6, 0.95, 0, 0.08, 0.6),
       [3.6, 2.5],
+      { cluster: [3.1, 2.4], solo: [3.15, 2.5] },
     );
     this.add(
       'onion',
       buildOnion(ctx),
       pose(3.35, -1.45, 1.0, 0.08, Math.PI / 2 - 0.75, 0.1, 0.92),
       pose(0.75, -0.1, 0, 0.12, Math.PI / 2 - 0.5, 0, 1.2),
-      pose(1.25, 0.1, 0.6, 0.08, Math.PI / 2 - 0.7, 0.08, 0.7),
+      pose(1.5, 0.15, 0.6, 0.08, Math.PI / 2 - 0.7, 0.08, 0.7),
       [2.6, 3.0],
+      { cluster: [2.05, 2.4], solo: [1.95, 2.4] },
     );
     this.add(
       'drive',
@@ -119,6 +142,7 @@ export class Stage {
       pose(0, -0.1, 0, 0.92, -0.3, 0, 1.12),
       pose(3.75, 0.45, -0.2, 0.95, -0.4, 0.18, 0.56),
       [4.0, 2.8],
+      { cluster: [3.9, 3.0], solo: [4.1, 2.95] },
     );
 
     this.resize();
@@ -128,7 +152,15 @@ export class Stage {
     });
   }
 
-  private add(key: Exclude<SpecimenKey, 'none'>, spec: Specimen, cluster: Pose, solo: Pose, outro: Pose, shadowSize: [number, number]) {
+  private add(
+    key: Exclude<SpecimenKey, 'none'>,
+    spec: Specimen,
+    cluster: Pose,
+    solo: Pose,
+    outro: Pose,
+    shadowSize: [number, number],
+    ext: Actor['ext'],
+  ) {
     // a soft shadow on the page behind each specimen, so it sits in the layout instead of floating over it
     const shadow = new THREE.Mesh(
       new THREE.PlaneGeometry(1, 1),
@@ -136,7 +168,7 @@ export class Stage {
     );
     shadow.renderOrder = -1;
     this.root.add(shadow);
-    const actor: Actor = { spec, cluster, solo, outro, w: 0, phase: Object.keys(this.actors).length * 1.7, shadow, shadowSize };
+    const actor: Actor = { spec, cluster, solo, outro, w: 0, ext, phase: Object.keys(this.actors).length * 1.7, shadow, shadowSize };
     this.actors[key] = actor;
     spec.group.position.copy(cluster.p);
     spec.group.quaternion.copy(cluster.q);
@@ -154,15 +186,55 @@ export class Stage {
     this.clusterShift.set(x, y, 0);
   }
 
+  /*
+    Pin a specimen to a rectangle of the page. The first screen, the phone
+    layout of each chapter and the last screen all reserve room in the HTML and
+    hand it over here, so type and objects never fight for the same space.
+  */
+  place(kind: SlotKind, key: string, rect: PageRect | null, bleed = 1) {
+    const a = this.actors[key as Exclude<SpecimenKey, 'none'>];
+    if (!a) return;
+    if (!rect) {
+      delete this.slots[kind][key];
+      return;
+    }
+    const c = this.renderer.domElement.getBoundingClientRect();
+    if (!c.height) return;
+    const k = (2 * this.camera.position.z * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) / c.height;
+    const ext = kind === 'solo' ? a.ext.solo : a.ext.cluster;
+    const slot = (this.slots[kind][key] ??= { p: new THREE.Vector3(), s: 1 });
+    slot.p.set((rect.cx - (c.left + c.width / 2)) * k, -(rect.cy - (c.top + c.height / 2)) * k, 0);
+    slot.s = Math.min((rect.w * k) / ext[0], (rect.h * k) / ext[1]) * bleed;
+  }
+
+  /*
+    Wide screens: a specimen alone on stage sits in the middle of the gap
+    between the text on the left and the numbers on the right, and never
+    grows wider than that gap.
+  */
+  fitSolo(key: string, gapCentre: number, gapWidth: number) {
+    const a = this.actors[key as Exclude<SpecimenKey, 'none'>];
+    const c = this.renderer.domElement.getBoundingClientRect();
+    if (!a || !c.height) return;
+    const k = (2 * this.camera.position.z * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) / c.height;
+    this.soloFit[key] = { dx: (gapCentre - (c.left + c.width / 2)) * k, cap: (gapWidth * k) / a.ext.solo[0] };
+  }
+
   resize() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+    const c = this.renderer.domElement;
+    const w = c.clientWidth || window.innerWidth;
+    const h = c.clientHeight || window.innerHeight;
+    if (w === this.cw && h === this.ch) return;
+    this.cw = w;
+    this.ch = h;
     this.aspect = w / h;
     this.fit = Math.min(1, this.aspect / 1.65);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    // phones have dense screens and small GPUs: a lower ceiling there costs nothing visible
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, w < 900 ? 1.5 : 1.75));
     this.renderer.setSize(w, h, false);
     this.camera.aspect = this.aspect;
     this.camera.updateProjectionMatrix();
+    this.blank = false;
   }
 
   tick(t: number, dt: number) {
@@ -175,29 +247,42 @@ export class Stage {
     this.hemi.color.lerp(this.skyT, k);
     this.hemi.groundColor.lerp(this.skyT, k);
 
+    let any = false;
     for (const [key, a] of Object.entries(this.actors)) {
       const g = a.spec.group;
       const solo = this.mode === key;
       const outro = this.mode === 'outro';
       const cluster = this.mode === 'cluster' || outro;
       const rest = outro ? a.outro : a.cluster;
+      const slot = solo ? this.slots.solo[key] : outro ? this.slots.outro[key] : cluster ? this.slots.cluster[key] : undefined;
       let scale: number;
       if (solo) {
-        this.tmpP.copy(a.solo.p);
-        this.tmpP.x *= this.fit;
-        if (this.fit < 0.75) this.tmpP.y += 0.9;
         g.quaternion.slerp(a.solo.q, k);
-        scale = a.solo.s * THREE.MathUtils.lerp(0.36, 1, this.fit);
-      } else if (cluster) {
-        this.tmpP.copy(rest.p);
-        this.tmpP.x *= Math.min(1, this.aspect / 1.78);
-        if (this.fit < 0.6) {
-          // tall screens: gather everything into the band between the name and the text
-          this.tmpP.y = outro ? (a.phase % 3.4 < 1.7 ? 1.0 : 0.1) : this.tmpP.y * 0.42 - 0.15;
+        if (slot) {
+          this.tmpP.copy(slot.p);
+          scale = slot.s;
+        } else {
+          const f = this.soloFit[key];
+          this.tmpP.copy(a.solo.p);
+          this.tmpP.x = this.tmpP.x * this.fit + (f?.dx ?? 0);
+          if (this.fit < 0.75) this.tmpP.y += 0.9;
+          scale = Math.min(a.solo.s * THREE.MathUtils.lerp(0.36, 1, this.fit), f?.cap ?? Infinity);
         }
-        this.tmpP.add(this.clusterShift);
+      } else if (cluster) {
         g.quaternion.slerp(rest.q, k);
-        scale = rest.s * THREE.MathUtils.lerp(0.5, 1, this.fit);
+        if (slot) {
+          this.tmpP.copy(slot.p);
+          scale = slot.s;
+        } else {
+          this.tmpP.copy(rest.p);
+          this.tmpP.x *= Math.min(1, this.aspect / 1.78);
+          if (this.fit < 0.6) {
+            // tall screens: gather everything into the band between the name and the text
+            this.tmpP.y = outro ? (a.phase % 3.4 < 1.7 ? 1.0 : 0.1) : this.tmpP.y * 0.42 - 0.15;
+          }
+          this.tmpP.add(this.clusterShift);
+          scale = rest.s * THREE.MathUtils.lerp(0.5, 1, this.fit);
+        }
       } else {
         // leave the way it came, well past the edge of the frame
         this.tmpP.copy(a.cluster.p).setZ(0).normalize().multiplyScalar(11 * Math.max(1, this.aspect / 1.4));
@@ -205,16 +290,21 @@ export class Stage {
         g.quaternion.slerp(a.cluster.q, k * 0.5);
         scale = a.cluster.s * 0.8;
       }
-      this.tmpP.y += Math.sin(t * 0.7 + a.phase) * 0.07;
-      g.position.lerp(this.tmpP, k);
+      this.tmpP.y += Math.sin(t * 0.7 + a.phase) * (slot ? 0.035 : 0.07);
+      // a slot that follows the page (the last screen on a phone) has to be tracked tightly
+      g.position.lerp(this.tmpP, slot && outro ? 1 - Math.exp(-14 * dt) : k);
       g.scale.setScalar(THREE.MathUtils.lerp(g.scale.x, scale, k));
       a.w = THREE.MathUtils.lerp(a.w, solo ? 1 : cluster ? 0.25 : 0, k);
       g.visible = solo || cluster || g.position.length() < 9.5;
+      any ||= g.visible;
       a.shadow.visible = g.visible;
       a.shadow.position.set(g.position.x + 0.35 * g.scale.x, g.position.y - 0.55 * g.scale.x, g.position.z - 1.6);
       a.shadow.scale.set(a.shadowSize[0] * g.scale.x, a.shadowSize[1] * g.scale.x, 1);
       if (g.visible) a.spec.update(dt, t, solo ? (this.progress[key] ?? 0) : 0, a.w);
     }
+    // nothing on stage (the long text sections): draw one empty frame, then rest
+    if (!any && this.blank) return;
+    this.blank = !any;
     this.renderer.render(this.scene, this.camera);
   }
 }
